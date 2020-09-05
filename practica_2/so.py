@@ -90,7 +90,10 @@ class Kernel():
 
         # set CPU program counter at program's first intruction
         HARDWARE.cpu.pc = 0
-
+    
+    def executeBatch(self, batch):
+        for program in batch:
+            self.run(program)
 
     def __repr__(self):
         return "Kernel "
