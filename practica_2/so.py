@@ -63,10 +63,10 @@ class KillInterruptionHandler(AbstractInterruptionHandler):
 
     def execute(self, irq):
         log.logger.info(" Program Finished ")
-        # solo se apaga cuando se haya terminado la ejecucion de todos los programas
-        if self.kernel._finished:
+        if (self._kernel.isQueueEmpty()):
             HARDWARE.switchOff()
-        
+        else:
+            self._kernel.runProgramInQueue()
 
 
 # emulates the core of an Operative System
@@ -76,16 +76,7 @@ class Kernel():
         ## setup interruption handlers
         killHandler = KillInterruptionHandler(self)
         HARDWARE.interruptVector.register(KILL_INTERRUPTION_TYPE, killHandler)
-        self.finished = False
-
-    @property
-    def finished(self):
-        ## flag para determinar el estado de la ejecucion
-        return self._finished
-
-    @finished.setter
-    def finished(self, value):
-        self._finished = value
+        self._programsQueue = ProgramsQueue()
 
     def load_program(self, program):
         # loads the program in main memory  
@@ -104,11 +95,30 @@ class Kernel():
         HARDWARE.cpu.pc = 0
     
     def executeBatch(self, batch):
-        for program in batch:
-            self.run(program)
-            ## si es el ultimo, se setea el flag en true
-            if batch.index(program) == len(batch) -1:
-                self.finished = True  
+        self._programsQueue.addProgramsToQueue(batch)
+        self.runProgramInQueue()
+        # for program in batch:
+        #     self.run(program)
+
+    def runProgramInQueue(self):
+        program = self._programsQueue.getProgramFromQueue()
+        self.run(program)
+
+    def isQueueEmpty(self):
+        return self._programsQueue.isQueueEmpty()
 
     def __repr__(self):
         return "Kernel "
+
+class ProgramsQueue():
+    def __init__(self):
+        self._queue = []
+    
+    def isQueueEmpty(self):
+        return len(self._queue) == 0
+    
+    def getProgramFromQueue(self):
+        return self._queue.pop(0)
+
+    def addProgramsToQueue(self, programs):
+        self._queue = programs
