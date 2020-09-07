@@ -97,8 +97,6 @@ class Kernel():
     def executeBatch(self, batch):
         self._programsQueue.addProgramsToQueue(batch)
         self.runProgramInQueue()
-        # for program in batch:
-        #     self.run(program)
 
     def runProgramInQueue(self):
         program = self._programsQueue.getProgramFromQueue()
