@@ -63,8 +63,10 @@ class KillInterruptionHandler(AbstractInterruptionHandler):
 
     def execute(self, irq):
         log.logger.info(" Program Finished ")
-        # por ahora apagamos el hardware porque estamos ejecutando un solo programa
-        HARDWARE.switchOff()
+        if (self._kernel.isQueueEmpty()):
+            HARDWARE.switchOff()
+        else:
+            self._kernel.runProgramInQueue()
 
 
 # emulates the core of an Operative System
@@ -74,6 +76,7 @@ class Kernel():
         ## setup interruption handlers
         killHandler = KillInterruptionHandler(self)
         HARDWARE.interruptVector.register(KILL_INTERRUPTION_TYPE, killHandler)
+        self._programsQueue = ProgramsQueue()
 
     def load_program(self, program):
         # loads the program in main memory  
@@ -92,8 +95,30 @@ class Kernel():
         HARDWARE.cpu.pc = 0
     
     def executeBatch(self, batch):
-        for program in batch:
-            self.run(program)
+        self._programsQueue.addProgramsToQueue(batch)
+        self.runProgramInQueue()
+        # for program in batch:
+        #     self.run(program)
+
+    def runProgramInQueue(self):
+        program = self._programsQueue.getProgramFromQueue()
+        self.run(program)
+
+    def isQueueEmpty(self):
+        return self._programsQueue.isQueueEmpty()
 
     def __repr__(self):
         return "Kernel "
+
+class ProgramsQueue():
+    def __init__(self):
+        self._queue = []
+    
+    def isQueueEmpty(self):
+        return len(self._queue) == 0
+    
+    def getProgramFromQueue(self):
+        return self._queue.pop(0)
+
+    def addProgramsToQueue(self, programs):
+        self._queue = programs
