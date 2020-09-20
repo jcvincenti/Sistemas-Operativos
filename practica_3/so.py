@@ -121,7 +121,7 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
 
     def execute(self, irq):
         program = irq.parameters
-        dir = 0 #TODO self.kernel.loader.loadInMemory(program) -> Devuelve el dir
+        dir = self.kernel._loader.loadInMemory(program)
         pid = self.kernel._pcbTable.getNewPID()
         pcb = PCB(pid, dir, program.name)
         self.kernel._pcbTable.add(pcb)
@@ -153,6 +153,7 @@ class Kernel():
         ## controls the Hardware's I/O Device
         self._ioDeviceController = IoDeviceController(HARDWARE.ioDevice)
         self._pcbTable = PCBTable()
+        self._loader = Loader()
 
     @property
     def ioDeviceController(self):
@@ -231,3 +232,15 @@ class PCBTable():
         pcb = self.get(pid)
         self._pcbs.remove(pcb)
 
+class Loader():
+
+    def __init__(self):
+        self._baseDir = 0
+    
+    def loadInMemory(self, program):
+        progSize = len(program.instructions)
+        for index in range(0, progSize):
+            inst = program.instructions[index]
+            HARDWARE.memory.write(index, inst)
+            self._baseDir += 1
+        return self._baseDir
