@@ -159,24 +159,15 @@ class Kernel():
     def ioDeviceController(self):
         return self._ioDeviceController
 
-    def load_program(self, program):
-        # loads the program in main memory
-        progSize = len(program.instructions)
-        for index in range(0, progSize):
-            inst = program.instructions[index]
-            HARDWARE.memory.write(index, inst)
-
     ## emulates a "system call" for programs execution
     def run(self, program):
-        #self.load_program(program)
-        log.logger.info("\n Executing program: {name}".format(name=program.name))
-        log.logger.info(HARDWARE)
-
         newIRQ = IRQ(NEW_INTERRUPTION_TYPE, program)
         HARDWARE.interruptVector.handle(newIRQ)
 
         # set CPU program counter at program's first intruction
         HARDWARE.cpu.pc = 0
+        log.logger.info("\n Executing program: {name}".format(name=program.name))
+        log.logger.info(HARDWARE)
 
     def __repr__(self):
         return "Kernel "
