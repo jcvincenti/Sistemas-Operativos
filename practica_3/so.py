@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from hardware import *
+from pcbState import *
 import log
 
 
@@ -116,6 +117,21 @@ class IoOutInterruptionHandler(AbstractInterruptionHandler):
         HARDWARE.cpu.pc = pcb['pc']
         log.logger.info(self.kernel.ioDeviceController)
 
+class NewInterruptionHandler(AbstractInterruptionHandler):
+
+    def execute(self, irq):
+        program = irq.parameters
+        dir = 0 #TODO self.kernel.loader.loadInMemory(program) -> Devuelve el dir
+        pid = self.kernel._pcbTable.getNewPID()
+        pcb = PCB(pid, dir, program.name)
+        self.kernel._pcbTable.add(pcb)
+        
+        if self.kernel._pcbTable.runningPCB:
+            pcb.state = PCBState.READY
+            #TODO: self.kernel.readyqueue.add(pcb)
+        else:
+            pcb.state = PCBState.RUNNING
+            #TODO: self.kernel.dispatcher.load(pcb)
 
 # emulates the core of an Operative System
 class Kernel():
@@ -131,9 +147,12 @@ class Kernel():
         ioOutHandler = IoOutInterruptionHandler(self)
         HARDWARE.interruptVector.register(IO_OUT_INTERRUPTION_TYPE, ioOutHandler)
 
+        newHandler = NewInterruptionHandler(self)
+        HARDWARE.interruptVector.register(NEW_INTERRUPTION_TYPE, newHandler)
+
         ## controls the Hardware's I/O Device
         self._ioDeviceController = IoDeviceController(HARDWARE.ioDevice)
-
+        self._pcbTable = PCBTable()
 
     @property
     def ioDeviceController(self):
@@ -148,13 +167,67 @@ class Kernel():
 
     ## emulates a "system call" for programs execution
     def run(self, program):
-        self.load_program(program)
+        #self.load_program(program)
         log.logger.info("\n Executing program: {name}".format(name=program.name))
         log.logger.info(HARDWARE)
+
+        newIRQ = IRQ(NEW_INTERRUPTION_TYPE, program)
+        HARDWARE.interruptVector.handle(newIRQ)
 
         # set CPU program counter at program's first intruction
         HARDWARE.cpu.pc = 0
 
-
     def __repr__(self):
         return "Kernel "
+
+class PCB():
+    
+    def __init__(self, pid, basedir, path):
+        self._pid = pid
+        self._basedir = basedir
+        self._path = path
+        self._state = PCBState.NEW
+        self._pc = 0
+
+    @property
+    def state(self):
+        return self._state
+
+    @state.setter
+    def state(self, state):
+        self._state = state
+
+class PCBTable():
+    
+    def __init__(self):
+        self._pcbs = []
+        self._pidCounter = 0
+        self._runningPCB = None
+
+    @property
+    def pidCounter(self):
+        return self._pidCounter
+    
+    @property
+    def runningPCB(self):
+        return self._runningPCB
+
+    def getNewPID(self):
+        self._pidCounter += 1
+        return self._pidCounter
+
+    def add(self, pcb):
+        self._pcbs.append(pcb)
+
+    def get(self, pid):
+        result = None
+        for pcb in self._pcbs:
+            if pcb._pid == pid:
+                result = pcb
+                break
+        return result
+    
+    def remove(self, pid):
+        pcb = self.get(pid)
+        self._pcbs.remove(pcb)
+
