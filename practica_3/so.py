@@ -266,5 +266,5 @@ class ReadyQueue():
     def get(self):
         return self._queue.pop(0)
 
-    def add(self, programs):
-        self._queue = programs
+    def add(self, program):
+        self._queue.append(program)
