@@ -98,7 +98,15 @@ class KillInterruptionHandler(AbstractInterruptionHandler):
 
     def execute(self, irq):
         log.logger.info(" Program Finished ")
-        HARDWARE.cpu.pc = -1  ## dejamos el CPU IDLE
+        pcb = self.kernel._pcbTable.runningPCB
+        self.kernel._pcbTable.runningPCB = None
+        pcb.state = PCBState.TERMINATED
+
+        if not self.kernel._readyQueue.isEmpty():
+            pcb = self.kernel._readyQueue.get()
+            pcb.state = PCBState.RUNNING
+            self.kernel._dispatcher.load(pcb)
+            self.kernel._pcbTable.runningPCB = pcb
 
 class IoInInterruptionHandler(AbstractInterruptionHandler):
 
@@ -128,10 +136,10 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
         
         if self.kernel._pcbTable.runningPCB:
             pcb.state = PCBState.READY
-            #TODO: self.kernel.readyqueue.add(pcb)
+            self.kernel._readyQueue.add(pcb)
         else:
             pcb.state = PCBState.RUNNING
-            #TODO: self.kernel.dispatcher.load(pcb)
+            self.kernel._dispatcher.load(pcb)
 
 # emulates the core of an Operative System
 class Kernel():
@@ -154,6 +162,8 @@ class Kernel():
         self._ioDeviceController = IoDeviceController(HARDWARE.ioDevice)
         self._pcbTable = PCBTable()
         self._loader = Loader()
+        self._readyQueue = ReadyQueue()
+        self._dispatcher = Dispatcher()
 
     @property
     def ioDeviceController(self):
@@ -235,3 +245,26 @@ class Loader():
             HARDWARE.memory.write(index, inst)
             self._baseDir += 1
         return self._baseDir
+
+class Dispatcher():
+
+    def load(self, pcb):
+        HARDWARE.cpu.pc = pcb._baseDir + pcb._pc
+        HARDWARE.mmu.baseDir = pcb._baseDir
+
+    def save(self, pcb):
+        pcb._pc = HARDWARE.cpu.pc - pcb._baseDir
+        HARDWARE.cpu.pc = -1
+
+class ReadyQueue():
+    def __init__(self):
+        self._queue = []
+    
+    def isEmpty(self):
+        return len(self._queue) == 0
+    
+    def get(self):
+        return self._queue.pop(0)
+
+    def add(self, programs):
+        self._queue = programs
