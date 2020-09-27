@@ -102,9 +102,11 @@ class AbstractInterruptionHandler():
     
     def loadIfNoRunningPcb(self, pcb):
         if self.kernel._pcbTable.runningPCB:
+            print("pcb a ReadyQueue")
             pcb.state = PCBState.READY
             self.kernel._readyQueue.add(pcb)
         else:
+            print("pcb a Running")
             pcb.state = PCBState.RUNNING
             self.kernel._dispatcher.load(pcb)
             self.kernel._pcbTable._runningPCB = pcb
@@ -128,7 +130,6 @@ class IoInInterruptionHandler(AbstractInterruptionHandler):
         self.kernel._dispatcher.save(pcb)
         self.kernel._pcbTable._runningPCB = None
         pcb.state = PCBState.WAITING
-        HARDWARE.cpu.pc = -1   ## dejamos el CPU IDLE
         self.kernel.ioDeviceController.runOperation(pcb, operation)
         log.logger.info(self.kernel.ioDeviceController)
         self.loadIfReadyQueueNotEmpty()
@@ -149,6 +150,7 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
         dir = self.kernel._loader.loadInMemory(program)
         pid = self.kernel._pcbTable.getNewPID()
         pcb = PCB(pid, dir, program.name)
+        print("Program " + pcb._path + " baseDir=" + str(pcb._basedir))
         self.kernel._pcbTable.add(pcb)
         self.loadIfNoRunningPcb(pcb)
 
@@ -250,16 +252,20 @@ class Loader():
         self._baseDir = 0
     
     def loadInMemory(self, program):
+        oldBaseDir = self._baseDir
         progSize = len(program.instructions)
         for index in range(0, progSize):
             inst = program.instructions[index]
-            HARDWARE.memory.write(index, inst)
+            HARDWARE.memory.write(index + oldBaseDir, inst)
             self._baseDir += 1
-        return self._baseDir
+        return oldBaseDir
 
 class Dispatcher():
 
     def load(self, pcb):
+        print("Load pcb " + pcb._path)
+        print("PC= " + str(pcb._pc))
+        print("Basedir= " + str(pcb._basedir))
         HARDWARE.cpu.pc = pcb._pc
         HARDWARE.mmu.baseDir = pcb._basedir
 
