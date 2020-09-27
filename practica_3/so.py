@@ -93,21 +93,21 @@ class AbstractInterruptionHandler():
     def execute(self, irq):
         log.logger.error("-- EXECUTE MUST BE OVERRIDEN in class {classname}".format(classname=self.__class__.__name__))
 
-    def loadIfReadyQueueNotEmpty():
+    def loadIfReadyQueueNotEmpty(self):
         if not self.kernel._readyQueue.isEmpty():
             pcb = self.kernel._readyQueue.get()
             pcb.state = PCBState.RUNNING
             self.kernel._dispatcher.load(pcb)
-            self.kernel._pcbTable.runningPCB = pcb
+            self.kernel._pcbTable._runningPCB = pcb
     
-    def loadIfNoRunningPcb():
+    def loadIfNoRunningPcb(self, pcb):
         if self.kernel._pcbTable.runningPCB:
             pcb.state = PCBState.READY
             self.kernel._readyQueue.add(pcb)
         else:
             pcb.state = PCBState.RUNNING
             self.kernel._dispatcher.load(pcb)
-            self.kernel._pcbTable.runningPCB = pcb
+            self.kernel._pcbTable._runningPCB = pcb
 
 
 class KillInterruptionHandler(AbstractInterruptionHandler):
@@ -115,7 +115,7 @@ class KillInterruptionHandler(AbstractInterruptionHandler):
     def execute(self, irq):
         log.logger.info(" Program Finished ")
         pcb = self.kernel._pcbTable.runningPCB
-        self.kernel._pcbTable.runningPCB = None
+        self.kernel._pcbTable._runningPCB = None
         pcb.state = PCBState.TERMINATED
         self.loadIfReadyQueueNotEmpty()
         
@@ -125,8 +125,8 @@ class IoInInterruptionHandler(AbstractInterruptionHandler):
     def execute(self, irq):
         operation = irq.parameters
         pcb = self.kernel._pcbTable.runningPCB
-        self.kernel._pcbTable.runningPCB = None
         self.kernel._dispatcher.save(pcb)
+        self.kernel._pcbTable._runningPCB = None
         pcb.state = PCBState.WAITING
         HARDWARE.cpu.pc = -1   ## dejamos el CPU IDLE
         self.kernel.ioDeviceController.runOperation(pcb, operation)
@@ -138,9 +138,8 @@ class IoOutInterruptionHandler(AbstractInterruptionHandler):
 
     def execute(self, irq):
         pcb = self.kernel.ioDeviceController.getFinishedPCB()
-        HARDWARE.cpu.pc = pcb['pc']
         log.logger.info(self.kernel.ioDeviceController)
-        self.loadIfNoRunningPcb()
+        self.loadIfNoRunningPcb(pcb)
         
 
 class NewInterruptionHandler(AbstractInterruptionHandler):
@@ -151,7 +150,7 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
         pid = self.kernel._pcbTable.getNewPID()
         pcb = PCB(pid, dir, program.name)
         self.kernel._pcbTable.add(pcb)
-        self.loadIfNoRunningPcb()
+        self.loadIfNoRunningPcb(pcb)
 
 # emulates the core of an Operative System
 class Kernel():
@@ -262,7 +261,7 @@ class Dispatcher():
 
     def load(self, pcb):
         HARDWARE.cpu.pc = pcb._pc
-        HARDWARE.mmu.baseDir = pcb._baseDir
+        HARDWARE.mmu.baseDir = pcb._basedir
 
     def save(self, pcb):
         pcb._pc = HARDWARE.cpu.pc
