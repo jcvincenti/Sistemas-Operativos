@@ -1,6 +1,7 @@
 from hardware import *
 from so import *
 import log
+from Strategy import *
 
 
 ##
@@ -19,7 +20,7 @@ if __name__ == '__main__':
     ## new create the Operative System Kernel
     # "booteamos" el sistema operativo
     kernel = Kernel()
-
+    kernel.setSchedulingStrategy(FirstComeFirstServed())
     # Ahora vamos a intentar ejecutar 3 programas a la vez
     ##################
     prg1 = Program("prg1.exe", [ASM.CPU(2), ASM.IO(), ASM.CPU(3), ASM.IO(), ASM.CPU(2)])

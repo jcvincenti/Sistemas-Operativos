@@ -94,8 +94,8 @@ class AbstractInterruptionHandler():
         log.logger.error("-- EXECUTE MUST BE OVERRIDEN in class {classname}".format(classname=self.__class__.__name__))
 
     def loadIfReadyQueueNotEmpty(self):
-        if not self.kernel._readyQueue.isEmpty():
-            pcb = self.kernel._readyQueue.get()
+        if not self.kernel._scheduler.isEmpty():
+            pcb = self.kernel._scheduler.getNext()
             pcb.state = PCBState.RUNNING
             self.kernel._dispatcher.load(pcb)
             self.kernel._pcbTable._runningPCB = pcb
@@ -103,7 +103,7 @@ class AbstractInterruptionHandler():
     def loadIfNoRunningPcb(self, pcb):
         if self.kernel._pcbTable.runningPCB:
             pcb.state = PCBState.READY
-            self.kernel._readyQueue.add(pcb)
+            self.kernel._scheduler.add(pcb)
         else:
             pcb.state = PCBState.RUNNING
             self.kernel._dispatcher.load(pcb)
@@ -173,8 +173,8 @@ class Kernel():
         self._ioDeviceController = IoDeviceController(HARDWARE.ioDevice)
         self._pcbTable = PCBTable()
         self._loader = Loader()
-        self._readyQueue = ReadyQueue()
         self._dispatcher = Dispatcher()
+        self._scheduler = None
 
     @property
     def ioDeviceController(self):
@@ -182,6 +182,9 @@ class Kernel():
 
     ## emulates a "system call" for programs execution
     def run(self, program):
+        if self._scheduler == None:
+            raise Exception("--- NO SCHEDULER SETTED ---")
+
         newIRQ = IRQ(NEW_INTERRUPTION_TYPE, program)
         HARDWARE.interruptVector.handle(newIRQ)
 
@@ -191,6 +194,9 @@ class Kernel():
 
     def __repr__(self):
         return "Kernel "
+    
+    def setSchedulingStrategy(self, strategy):
+        self._scheduler = strategy
 
 class PCB():
     
@@ -266,16 +272,3 @@ class Dispatcher():
     def save(self, pcb):
         pcb._pc = HARDWARE.cpu.pc
         HARDWARE.cpu.pc = -1
-
-class ReadyQueue():
-    def __init__(self):
-        self._queue = []
-    
-    def isEmpty(self):
-        return len(self._queue) == 0
-    
-    def get(self):
-        return self._queue.pop(0)
-
-    def add(self, program):
-        self._queue.append(program)
