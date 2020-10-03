@@ -9,6 +9,9 @@ class AbstractScheduler():
 
     def add(self, program):
         self._queue.add(program)
+    
+    def mustExpropiate(self, runningPcb, pcbToAdd):
+        log.logger.error("-- EXECUTE MUST BE OVERRIDEN in class {classname}".format(classname=self.__class__.__name__))
 
 class FirstComeFirstServed(AbstractScheduler):
     def __init__(self):
