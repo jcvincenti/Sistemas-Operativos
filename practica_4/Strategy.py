@@ -1,4 +1,5 @@
 from ReadyQueue import *
+from hardware import *
 
 class AbstractScheduler():
     def isEmpty(self):
@@ -11,14 +12,11 @@ class AbstractScheduler():
         self._queue.add(program)
     
     def mustExpropiate(self, runningPcb, pcbToAdd):
-        log.logger.error("-- EXECUTE MUST BE OVERRIDEN in class {classname}".format(classname=self.__class__.__name__))
+        return False
 
 class FirstComeFirstServed(AbstractScheduler):
     def __init__(self):
         self._queue = NoPriorityQueue()
-    
-    def mustExpropiate(self, runningPcb, pcbToAdd):
-        return False
 
 class PreemtiveShortestJobFirst(AbstractScheduler):
     def __init__(self):
@@ -31,5 +29,7 @@ class NoPreemtiveShortestJobFirst(AbstractScheduler):
     def __init__(self):
         self._queue = PriorityQueue()
 
-    def mustExpropiate(self, runningPcb, pcbToAdd):
-        return False
+class RoundRobin(AbstractScheduler):
+    def __init__(self):
+        self._queue = NoPriorityQueue()
+        HARDWARE.timer.quantum = 2

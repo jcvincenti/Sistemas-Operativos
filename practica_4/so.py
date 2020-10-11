@@ -165,6 +165,16 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
         self.kernel._pcbTable.add(pcb)
         self.loadIfNoRunningPcb(pcb)
 
+class TimeoutInterruptionHandler(AbstractInterruptionHandler):
+    
+    def execute(self, irq):
+
+        pcb = self.kernel._pcbTable.runningPCB
+        self.kernel._dispatcher.save(pcb)
+        self.kernel._pcbTable._runningPCB = None
+        self.addPcbToReadyQueue(pcb)
+        self.loadIfReadyQueueNotEmpty()
+
 # emulates the core of an Operative System
 class Kernel():
 
@@ -181,6 +191,9 @@ class Kernel():
 
         newHandler = NewInterruptionHandler(self)
         HARDWARE.interruptVector.register(NEW_INTERRUPTION_TYPE, newHandler)
+
+        timeoutHandler = TimeoutInterruptionHandler(self)
+        HARDWARE.interruptVector.register(TIMEOUT_INTERRUPTION_TYPE, timeoutHandler)
 
         ## controls the Hardware's I/O Device
         self._ioDeviceController = IoDeviceController(HARDWARE.ioDevice)
@@ -290,6 +303,7 @@ class Dispatcher():
     def load(self, pcb):
         HARDWARE.cpu.pc = pcb._pc
         HARDWARE.mmu.baseDir = pcb._basedir
+        HARDWARE.timer.reset()
 
     def save(self, pcb):
         pcb._pc = HARDWARE.cpu.pc
