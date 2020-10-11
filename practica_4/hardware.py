@@ -46,9 +46,10 @@ STAT_INTERRUPTION_TYPE = "#STAT"
 ## emulates an Interrupt request
 class IRQ:
 
-    def __init__(self, type, parameters = None):
+    def __init__(self, type, parameters = None, priority = None):
         self._type = type
         self._parameters = parameters
+        self._priority = priority
 
     @property
     def parameters(self):
@@ -57,6 +58,10 @@ class IRQ:
     @property
     def type(self):
         return self._type
+    
+    @property
+    def priority(self):
+        return self._priority
 
 
 ## emulates the Interrupt Vector Table

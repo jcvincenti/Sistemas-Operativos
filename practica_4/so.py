@@ -94,20 +94,32 @@ class AbstractInterruptionHandler():
         log.logger.error("-- EXECUTE MUST BE OVERRIDEN in class {classname}".format(classname=self.__class__.__name__))
 
     def loadIfReadyQueueNotEmpty(self):
-        if not self.kernel._readyQueue.isEmpty():
-            pcb = self.kernel._readyQueue.get()
-            pcb.state = PCBState.RUNNING
-            self.kernel._dispatcher.load(pcb)
-            self.kernel._pcbTable._runningPCB = pcb
+        if not self.kernel._scheduler.isEmpty():
+            pcb = self.kernel._scheduler.getNext()
+            self.loadPcb(pcb)
     
     def loadIfNoRunningPcb(self, pcb):
-        if self.kernel._pcbTable.runningPCB:
-            pcb.state = PCBState.READY
-            self.kernel._readyQueue.add(pcb)
+        runningPcb = self.kernel._pcbTable.runningPCB
+
+        if runningPcb:
+            if self.kernel._scheduler.mustExpropiate(runningPcb, pcb):
+                self.kernel._pcbTable._runningPCB = None
+                self.kernel._dispatcher.save(runningPcb)
+                self.addPcbToReadyQueue(runningPcb)
+                self.loadPcb(pcb)
+            else:
+                self.addPcbToReadyQueue(pcb)
         else:
-            pcb.state = PCBState.RUNNING
-            self.kernel._dispatcher.load(pcb)
-            self.kernel._pcbTable._runningPCB = pcb
+            self.loadPcb(pcb)
+    
+    def loadPcb(self, pcb):
+        pcb.state = PCBState.RUNNING
+        self.kernel._dispatcher.load(pcb)
+        self.kernel._pcbTable._runningPCB = pcb
+    
+    def addPcbToReadyQueue(self, pcb):
+        pcb.state = PCBState.READY
+        self.kernel._scheduler.add(pcb)
 
 
 class KillInterruptionHandler(AbstractInterruptionHandler):
@@ -148,9 +160,20 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
         program = irq.parameters
         dir = self.kernel._loader.loadInMemory(program)
         pid = self.kernel._pcbTable.getNewPID()
-        pcb = PCB(pid, dir, program.name)
+        progSize = len(program.instructions)
+        pcb = PCB(pid, dir, program.name, progSize, irq.priority)
         self.kernel._pcbTable.add(pcb)
         self.loadIfNoRunningPcb(pcb)
+
+class TimeoutInterruptionHandler(AbstractInterruptionHandler):
+    
+    def execute(self, irq):
+
+        pcb = self.kernel._pcbTable.runningPCB
+        self.kernel._dispatcher.save(pcb)
+        self.kernel._pcbTable._runningPCB = None
+        self.addPcbToReadyQueue(pcb)
+        self.loadIfReadyQueueNotEmpty()
 
 # emulates the core of an Operative System
 class Kernel():
@@ -169,20 +192,26 @@ class Kernel():
         newHandler = NewInterruptionHandler(self)
         HARDWARE.interruptVector.register(NEW_INTERRUPTION_TYPE, newHandler)
 
+        timeoutHandler = TimeoutInterruptionHandler(self)
+        HARDWARE.interruptVector.register(TIMEOUT_INTERRUPTION_TYPE, timeoutHandler)
+
         ## controls the Hardware's I/O Device
         self._ioDeviceController = IoDeviceController(HARDWARE.ioDevice)
         self._pcbTable = PCBTable()
         self._loader = Loader()
-        self._readyQueue = ReadyQueue()
         self._dispatcher = Dispatcher()
+        self._scheduler = None
 
     @property
     def ioDeviceController(self):
         return self._ioDeviceController
 
     ## emulates a "system call" for programs execution
-    def run(self, program):
-        newIRQ = IRQ(NEW_INTERRUPTION_TYPE, program)
+    def run(self, program, priority):
+        if self._scheduler == None:
+            raise Exception("--- NO SCHEDULER SETTED ---")
+
+        newIRQ = IRQ(NEW_INTERRUPTION_TYPE, program, priority)
         HARDWARE.interruptVector.handle(newIRQ)
 
         # set CPU program counter at program's first intruction
@@ -191,15 +220,20 @@ class Kernel():
 
     def __repr__(self):
         return "Kernel "
+    
+    def setSchedulingStrategy(self, strategy):
+        self._scheduler = strategy
 
 class PCB():
     
-    def __init__(self, pid, basedir, path):
+    def __init__(self, pid, basedir, path, progSize, priority):
         self._pid = pid
         self._basedir = basedir
         self._path = path
         self._state = PCBState.NEW
         self._pc = 0
+        self._progSize = progSize - 1
+        self._priority = priority
 
     @property
     def state(self):
@@ -208,6 +242,13 @@ class PCB():
     @state.setter
     def state(self, state):
         self._state = state
+
+    @property
+    def priority(self):
+        return self._priority
+    
+    def remainingInstructions(self):
+        return self._progSize - HARDWARE.cpu.pc if self.state == PCBState.RUNNING else self._progSize
 
 class PCBTable():
     
@@ -262,20 +303,8 @@ class Dispatcher():
     def load(self, pcb):
         HARDWARE.cpu.pc = pcb._pc
         HARDWARE.mmu.baseDir = pcb._basedir
+        HARDWARE.timer.reset()
 
     def save(self, pcb):
         pcb._pc = HARDWARE.cpu.pc
         HARDWARE.cpu.pc = -1
-
-class ReadyQueue():
-    def __init__(self):
-        self._queue = []
-    
-    def isEmpty(self):
-        return len(self._queue) == 0
-    
-    def get(self):
-        return self._queue.pop(0)
-
-    def add(self, program):
-        self._queue.append(program)
