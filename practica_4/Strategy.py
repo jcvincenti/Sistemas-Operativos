@@ -32,4 +32,4 @@ class NoPreemtiveShortestJobFirst(AbstractScheduler):
 class RoundRobin(AbstractScheduler):
     def __init__(self):
         self._queue = NoPriorityQueue()
-        HARDWARE.timer.quantum = 2
+        HARDWARE.timer.quantum = 3

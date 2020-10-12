@@ -2,6 +2,7 @@
 
 from hardware import *
 from pcbState import *
+from Gantt import *
 import log
 
 
@@ -97,6 +98,8 @@ class AbstractInterruptionHandler():
         if not self.kernel._scheduler.isEmpty():
             pcb = self.kernel._scheduler.getNext()
             self.loadPcb(pcb)
+        else: 
+            self.kernel._gantt.draw()
     
     def loadIfNoRunningPcb(self, pcb):
         runningPcb = self.kernel._pcbTable.runningPCB
@@ -127,6 +130,7 @@ class KillInterruptionHandler(AbstractInterruptionHandler):
     def execute(self, irq):
         log.logger.info(" Program Finished ")
         pcb = self.kernel._pcbTable.runningPCB
+        self.kernel._gantt.finish(pcb._path)
         self.kernel._pcbTable._runningPCB = None
         pcb.state = PCBState.TERMINATED
         self.kernel._dispatcher.save(pcb)
@@ -168,7 +172,6 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
 class TimeoutInterruptionHandler(AbstractInterruptionHandler):
     
     def execute(self, irq):
-
         pcb = self.kernel._pcbTable.runningPCB
         self.kernel._dispatcher.save(pcb)
         self.kernel._pcbTable._runningPCB = None
@@ -201,6 +204,8 @@ class Kernel():
         self._loader = Loader()
         self._dispatcher = Dispatcher()
         self._scheduler = None
+        self._gantt = Gantt.getInstance()
+        self._gantt.setKernel(self)
 
     @property
     def ioDeviceController(self):
@@ -211,6 +216,7 @@ class Kernel():
         if self._scheduler == None:
             raise Exception("--- NO SCHEDULER SETTED ---")
 
+        self._gantt.load(program.name)
         newIRQ = IRQ(NEW_INTERRUPTION_TYPE, program, priority)
         HARDWARE.interruptVector.handle(newIRQ)
 

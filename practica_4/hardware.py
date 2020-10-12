@@ -4,6 +4,7 @@ from tabulate import tabulate
 from time import sleep
 from threading import Thread, Lock
 import log
+from Gantt import *
 
 ##  Estas son la instrucciones soportadas por nuestro CPU
 INSTRUCTION_IO = 'IO'
@@ -95,6 +96,7 @@ class Clock():
         self._subscribers = []
         self._running = False
         self._currentTick = 0
+        self._gantt = Gantt.getInstance()
 
     def addSubscriber(self, subscriber):
         self._subscribers.append(subscriber)
@@ -123,6 +125,7 @@ class Clock():
             subscriber.tick(tickNbr)
         ## wait 1 second and keep looping
         sleep(1)
+        self._gantt.tick(tickNbr)
 
     def do_ticks(self, times):
         log.logger.info("---- :::: CLOCK do_ticks: {times} ::: -----".format(times=times))
