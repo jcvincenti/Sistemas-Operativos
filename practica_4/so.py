@@ -100,6 +100,7 @@ class AbstractInterruptionHandler():
             self.loadPcb(pcb)
         else: 
             self.kernel._gantt.draw()
+            HARDWARE.switchOff()
     
     def loadIfNoRunningPcb(self, pcb):
         runningPcb = self.kernel._pcbTable.runningPCB

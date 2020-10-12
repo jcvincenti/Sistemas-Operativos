@@ -40,4 +40,4 @@ class Gantt():
         self._kernel = kernel
 
     def draw(self):
-        print(tabulate(self._table, headers="keys", tablefmt='pretty'))
+        print(tabulate(self._table, headers="keys", tablefmt="psql"))
