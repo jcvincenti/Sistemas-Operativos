@@ -98,9 +98,6 @@ class AbstractInterruptionHandler():
         if not self.kernel._scheduler.isEmpty():
             pcb = self.kernel._scheduler.getNext()
             self.loadPcb(pcb)
-        else: 
-            self.kernel._gantt.draw()
-            HARDWARE.switchOff()
     
     def loadIfNoRunningPcb(self, pcb):
         runningPcb = self.kernel._pcbTable.runningPCB
@@ -179,6 +176,12 @@ class TimeoutInterruptionHandler(AbstractInterruptionHandler):
         self.addPcbToReadyQueue(pcb)
         self.loadIfReadyQueueNotEmpty()
 
+class StatsInterruptionHandler(AbstractInterruptionHandler):
+    def execute(self, irq):
+        if self.kernel._pcbTable.getAreAllPCBsTerminated():
+            self.kernel._gantt.draw()
+            HARDWARE.switchOff()
+
 # emulates the core of an Operative System
 class Kernel():
 
@@ -198,6 +201,9 @@ class Kernel():
 
         timeoutHandler = TimeoutInterruptionHandler(self)
         HARDWARE.interruptVector.register(TIMEOUT_INTERRUPTION_TYPE, timeoutHandler)
+
+        statsHandler = StatsInterruptionHandler(self)
+        HARDWARE.interruptVector.register(STAT_INTERRUPTION_TYPE, statsHandler)
 
         ## controls the Hardware's I/O Device
         self._ioDeviceController = IoDeviceController(HARDWARE.ioDevice)
@@ -290,6 +296,9 @@ class PCBTable():
     def remove(self, pid):
         pcb = self.get(pid)
         self._pcbs.remove(pcb)
+
+    def getAreAllPCBsTerminated(self):
+        return all(pcb.state == PCBState.TERMINATED for pcb in self._pcbs)
 
 class Loader():
 

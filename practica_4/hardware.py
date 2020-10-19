@@ -197,7 +197,7 @@ class Cpu():
         self._interruptVector = interruptVector
         self._pc = -1
         self._ir = None
-        self._enable_stats = False
+        self._enable_stats = True
     
 
     def tick(self, tickNbr):
