@@ -2,6 +2,7 @@
 
 from hardware import *
 from pcbState import *
+from Gantt import *
 import log
 
 
@@ -127,6 +128,7 @@ class KillInterruptionHandler(AbstractInterruptionHandler):
     def execute(self, irq):
         log.logger.info(" Program Finished ")
         pcb = self.kernel._pcbTable.runningPCB
+        self.kernel._gantt.finish(pcb._path)
         self.kernel._pcbTable._runningPCB = None
         pcb.state = PCBState.TERMINATED
         self.kernel._dispatcher.save(pcb)
@@ -168,12 +170,17 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
 class TimeoutInterruptionHandler(AbstractInterruptionHandler):
     
     def execute(self, irq):
-
         pcb = self.kernel._pcbTable.runningPCB
         self.kernel._dispatcher.save(pcb)
         self.kernel._pcbTable._runningPCB = None
         self.addPcbToReadyQueue(pcb)
         self.loadIfReadyQueueNotEmpty()
+
+class StatsInterruptionHandler(AbstractInterruptionHandler):
+    def execute(self, irq):
+        if self.kernel._pcbTable.getAreAllPCBsTerminated():
+            self.kernel._gantt.draw()
+            HARDWARE.switchOff()
 
 # emulates the core of an Operative System
 class Kernel():
@@ -195,12 +202,17 @@ class Kernel():
         timeoutHandler = TimeoutInterruptionHandler(self)
         HARDWARE.interruptVector.register(TIMEOUT_INTERRUPTION_TYPE, timeoutHandler)
 
+        statsHandler = StatsInterruptionHandler(self)
+        HARDWARE.interruptVector.register(STAT_INTERRUPTION_TYPE, statsHandler)
+
         ## controls the Hardware's I/O Device
         self._ioDeviceController = IoDeviceController(HARDWARE.ioDevice)
         self._pcbTable = PCBTable()
         self._loader = Loader()
         self._dispatcher = Dispatcher()
         self._scheduler = None
+        self._gantt = Gantt.getInstance()
+        self._gantt.setKernel(self)
 
     @property
     def ioDeviceController(self):
@@ -211,6 +223,7 @@ class Kernel():
         if self._scheduler == None:
             raise Exception("--- NO SCHEDULER SETTED ---")
 
+        self._gantt.load(program.name)
         newIRQ = IRQ(NEW_INTERRUPTION_TYPE, program, priority)
         HARDWARE.interruptVector.handle(newIRQ)
 
@@ -283,6 +296,9 @@ class PCBTable():
     def remove(self, pid):
         pcb = self.get(pid)
         self._pcbs.remove(pcb)
+
+    def getAreAllPCBsTerminated(self):
+        return all(pcb.state == PCBState.TERMINATED for pcb in self._pcbs)
 
 class Loader():
 

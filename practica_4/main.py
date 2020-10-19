@@ -41,7 +41,3 @@ if __name__ == '__main__':
     kernel.run(prg3, 3)
     sleep(1)
     kernel.run(prg4, 1)
-
-
-
-
