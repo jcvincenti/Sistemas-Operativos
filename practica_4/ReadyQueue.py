@@ -16,3 +16,8 @@ class PriorityQueue(AbstractQueue):
     def add(self, program):
         self._queue.append(program)
         self._queue.sort(key=lambda x: x.priority)
+
+class SJFQueue(AbstractQueue):
+    def add(self, program):
+        self._queue.append(program)
+        self._queue.sort(key=lambda x: x.remainingInternalInstructions())
