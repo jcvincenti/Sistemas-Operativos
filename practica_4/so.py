@@ -103,6 +103,7 @@ class AbstractInterruptionHandler():
         runningPcb = self.kernel._pcbTable.runningPCB
 
         if runningPcb:
+            runningPcb.updatePC()
             if self.kernel._scheduler.mustExpropiate(runningPcb, pcb):
                 self.kernel._pcbTable._runningPCB = None
                 self.kernel._dispatcher.save(runningPcb)
@@ -170,11 +171,12 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
 class TimeoutInterruptionHandler(AbstractInterruptionHandler):
     
     def execute(self, irq):
-        pcb = self.kernel._pcbTable.runningPCB
-        self.kernel._dispatcher.save(pcb)
-        self.kernel._pcbTable._runningPCB = None
-        self.addPcbToReadyQueue(pcb)
-        self.loadIfReadyQueueNotEmpty()
+        if not self.kernel._scheduler.isEmpty():
+            pcb = self.kernel._pcbTable.runningPCB
+            self.kernel._dispatcher.save(pcb)
+            self.kernel._pcbTable._runningPCB = None
+            self.addPcbToReadyQueue(pcb)
+            self.loadIfReadyQueueNotEmpty()
 
 class StatsInterruptionHandler(AbstractInterruptionHandler):
     def execute(self, irq):
@@ -245,7 +247,7 @@ class PCB():
         self._path = path
         self._state = PCBState.NEW
         self._pc = 0
-        self._progSize = progSize - 1
+        self._progSize = progSize
         self._priority = priority
 
     @property
@@ -260,6 +262,12 @@ class PCB():
     def priority(self):
         return self._priority
     
+    def remainingInternalInstructions(self):
+        return self._progSize - self._pc
+
+    def updatePC(self):
+        self._pc = HARDWARE.cpu.pc
+
     def remainingInstructions(self):
         return self._progSize - HARDWARE.cpu.pc if self.state == PCBState.RUNNING else self._progSize
 
