@@ -170,11 +170,12 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
 class TimeoutInterruptionHandler(AbstractInterruptionHandler):
     
     def execute(self, irq):
-        pcb = self.kernel._pcbTable.runningPCB
-        self.kernel._dispatcher.save(pcb)
-        self.kernel._pcbTable._runningPCB = None
-        self.addPcbToReadyQueue(pcb)
-        self.loadIfReadyQueueNotEmpty()
+        if not self.kernel._scheduler.isEmpty():
+            pcb = self.kernel._pcbTable.runningPCB
+            self.kernel._dispatcher.save(pcb)
+            self.kernel._pcbTable._runningPCB = None
+            self.addPcbToReadyQueue(pcb)
+            self.loadIfReadyQueueNotEmpty()
 
 class StatsInterruptionHandler(AbstractInterruptionHandler):
     def execute(self, irq):

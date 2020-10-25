@@ -33,3 +33,14 @@ class RoundRobin(AbstractScheduler):
     def __init__(self):
         self._queue = NoPriorityQueue()
         HARDWARE.timer.quantum = 3
+
+class PriorityExpropiativo(AbstractScheduler):
+    def __init__(self):
+        self._queue = PriorityQueue()
+
+    def mustExpropiate(self, runningPcb, pcbToAdd):
+        return runningPcb._priority > pcbToAdd._priority
+
+class PriorityNoExpropiativo(AbstractScheduler):
+    def __init__(self):
+        self._queue = PriorityQueue()    

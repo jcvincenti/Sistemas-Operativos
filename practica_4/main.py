@@ -24,7 +24,9 @@ if __name__ == '__main__':
     # kernel.setSchedulingStrategy(FirstComeFirstServed())
     # kernel.setSchedulingStrategy(NoPreemtiveShortestJobFirst())
     # kernel.setSchedulingStrategy(PreemtiveShortestJobFirst())
-    kernel.setSchedulingStrategy(RoundRobin())
+    # kernel.setSchedulingStrategy(RoundRobin())
+    # kernel.setSchedulingStrategy(PriorityExpropiativo())
+    kernel.setSchedulingStrategy(PriorityNoExpropiativo())
 
     # Ahora vamos a intentar ejecutar 3 programas a la vez
     ##################
