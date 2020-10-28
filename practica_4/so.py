@@ -177,6 +177,8 @@ class TimeoutInterruptionHandler(AbstractInterruptionHandler):
             self.kernel._pcbTable._runningPCB = None
             self.addPcbToReadyQueue(pcb)
             self.loadIfReadyQueueNotEmpty()
+        else:
+            HARDWARE.timer.reset()
 
 class StatsInterruptionHandler(AbstractInterruptionHandler):
     def execute(self, irq):
@@ -269,6 +271,7 @@ class PCB():
         self._pc = HARDWARE.cpu.pc
 
     def remainingInstructions(self):
+        # metodo solo para el Gantt
         return self._progSize - HARDWARE.cpu.pc if self.state == PCBState.RUNNING else self._progSize
 
 class PCBTable():
