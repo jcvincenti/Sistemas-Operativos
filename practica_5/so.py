@@ -193,6 +193,7 @@ class Kernel():
 
     def __init__(self):
         ## setup interruption handlers
+        HARDWARE.mmu.frameSize = 4
         killHandler = KillInterruptionHandler(self)
         HARDWARE.interruptVector.register(KILL_INTERRUPTION_TYPE, killHandler)
 
@@ -219,16 +220,18 @@ class Kernel():
         self._scheduler = None
         self._gantt = Gantt.getInstance()
         self._gantt.setKernel(self)
+        self._fileSystem = FileSystem()
 
     @property
     def ioDeviceController(self):
         return self._ioDeviceController
 
     ## emulates a "system call" for programs execution
-    def run(self, program, priority):
+    def run(self, path, priority):
         if self._scheduler == None:
             raise Exception("--- NO SCHEDULER SETTED ---")
 
+        program = self._fileSystem.read(path)
         self._gantt.load(program.name)
         dictNewParam = {'program': program, 'priority': priority}
 
@@ -339,3 +342,24 @@ class Dispatcher():
     def save(self, pcb):
         pcb._pc = HARDWARE.cpu.pc
         HARDWARE.cpu.pc = -1
+
+class FileSystem:
+
+    def __init__(self):
+        self._disk = []
+
+    def write(self, path, program):
+        process = {'path': path, 'program': program }
+        self._disk.append(process)
+
+    def read(self, path):
+        result = None
+        for program in self._disk:
+            if program['path'] == path:
+                result = program['program']
+                break
+        if not result:
+            raise Exception	("Path invalido")
+        
+        return result
+            

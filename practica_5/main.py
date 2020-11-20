@@ -33,13 +33,12 @@ if __name__ == '__main__':
     prg1 = Program("prg1.exe", [ASM.CPU(6)])
     prg2 = Program("prg2.exe", [ASM.CPU(4)])
     prg3 = Program("prg3.exe", [ASM.CPU(3)])
-    prg4 = Program("prg4.exe", [ASM.CPU(2)])
+
+    kernel._fileSystem.write('c:/prg1.exe', prg1)
+    kernel._fileSystem.write('c:/prg2.exe', prg2)
+    kernel._fileSystem.write('c:/prg3.exe', prg3)
 
     # execute all programs "concurrently"
-    kernel.run(prg1, 5)
-    #sleep(1)
-    kernel.run(prg2, 2)
-    #sleep(1)
-    kernel.run(prg3, 3)
-    #sleep(1)
-    kernel.run(prg4, 1)
+    kernel.run('c:/prg1.exe', 0)
+    kernel.run('c:/prg2.exe', 2)
+    kernel.run('c:/prg3.exe', 1)
