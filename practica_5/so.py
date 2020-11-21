@@ -164,9 +164,12 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
         newParam = irq.parameters
         path = newParam['program']
         priority = newParam['priority']
-        pageTable = self.kernel._loader.loadInMemory(path)
+        obj = self.kernel._loader.loadInMemory(path)
+        pageTable = obj['pageTable']
+        program = obj['program']
+        progSize = len(program.instructions)
         pid = self.kernel._pcbTable.getNewPID()
-        pcb = PCB(pid, pageTable, path, priority)
+        pcb = PCB(pid, pageTable, progSize, path, priority)
         self.kernel._pcbTable.add(pcb)
         self.loadIfNoRunningPcb(pcb)
 
@@ -251,13 +254,17 @@ class Kernel():
     def freeFrames(self, frames):
         self._memoryManager.freeFrames(frames)
 
+    def enableGantt(self, enable):
+        HARDWARE.cpu.enable_stats = enable
+
 class PCB():
     
-    def __init__(self, pid, pageTable, path, priority):
+    def __init__(self, pid, pageTable, progSize, path, priority):
         self._pid = pid
         self._pageTable = pageTable
         self._path = path
         self._state = PCBState.NEW
+        self._progSize = progSize
         self._pc = 0
         self._priority = priority
 
@@ -274,14 +281,14 @@ class PCB():
         return self._priority
     
     def remainingInternalInstructions(self):
-        return (len(self._pageTable) * HARDWARE.mmu.frameSize) - self._pc
+        return self._progSize - self._pc
 
     def updatePC(self):
         self._pc = HARDWARE.cpu.pc
 
     def remainingInstructions(self):
         # metodo solo para el Gantt
-        return (len(self._pageTable) * HARDWARE.mmu.frameSize) - HARDWARE.cpu.pc if self.state == PCBState.RUNNING else (len(self._pageTable) * HARDWARE.mmu.frameSize)
+        return self._progSize - HARDWARE.cpu.pc if self.state == PCBState.RUNNING else self._progSize
 
 class PCBTable():
     
@@ -337,7 +344,7 @@ class Loader():
         for page in dictionary.items():
             self.loadPage(page)
 
-        return pageTable
+        return {'pageTable': pageTable, 'program': program}
 
     def assignKeys(self, paged, pageTable):
         return dict(zip(pageTable, paged))
