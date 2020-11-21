@@ -232,7 +232,6 @@ class Kernel():
         if self._scheduler == None:
             raise Exception("--- NO SCHEDULER SETTED ---")
 
-        #program = self._fileSystem.read(path)
         self._gantt.load(path)
         dictNewParam = {'program': path, 'priority': priority}
 
