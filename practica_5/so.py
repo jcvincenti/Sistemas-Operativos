@@ -215,12 +215,13 @@ class Kernel():
         ## controls the Hardware's I/O Device
         self._ioDeviceController = IoDeviceController(HARDWARE.ioDevice)
         self._pcbTable = PCBTable()
-        self._loader = Loader()
         self._dispatcher = Dispatcher()
         self._scheduler = None
         self._gantt = Gantt.getInstance()
         self._gantt.setKernel(self)
         self._fileSystem = FileSystem()
+        self._memoryManager = MemoryManager()
+        self._loader = Loader(self._memoryManager)
 
     @property
     def ioDeviceController(self):
@@ -320,17 +321,48 @@ class PCBTable():
 
 class Loader():
 
-    def __init__(self):
+    def __init__(self, memoryManager):
         self._baseDir = 0
+        self._memoryManager = memoryManager
     
     def loadInMemory(self, program):
-        oldBaseDir = self._baseDir
-        progSize = len(program.instructions)
-        for index in range(0, progSize):
-            inst = program.instructions[index]
-            HARDWARE.memory.write(index + oldBaseDir, inst)
+        print("instrucciones" + str(program.instructions))
+      
+        neccesaryPages = self.getNeccesaryPages(program)
+        print("neccesary pages " + str(neccesaryPages))
+       
+        pageTable = self._memoryManager.allocFrames(neccesaryPages)
+        print("pagetable " + str(pageTable))
+       
+        paged = self.paginate(program.instructions)
+        print("programa paginado: " + str(paged))
+
+        dictionary = self.assignKeys(paged, pageTable)
+        print("con keys: " + str(dictionary))
+
+        for page in dictionary.items():
+            self.loadPage(page)
+
+    def assignKeys(self, paged, pageTable):
+        return dict(zip(pageTable, paged))
+
+    def paginate(self, instructions):
+        frameSize = HARDWARE.mmu.frameSize
+        result = [instructions[i: i + frameSize] for i in range(0, len(instructions), frameSize)]
+        return result
+
+    def getNeccesaryPages(self, program):
+        if(len(program.instructions)) % HARDWARE.mmu.frameSize != 0:
+            return (len(program.instructions)) // HARDWARE.mmu.frameSize + 1
+        return (len(program.instructions)) // HARDWARE.mmu.frameSize
+            
+    def loadPage(self, page):
+        instructions = page[1] #El value
+        self._baseDir = page[0] * HARDWARE.mmu.frameSize  #La key(frame que me devuelve el MM) * frameSize
+        for i in range(len(instructions)):
+            inst = instructions[i]
+            HARDWARE.memory.write(self._baseDir, inst)
             self._baseDir += 1
-        return oldBaseDir
 
 class Dispatcher():
 
@@ -363,3 +395,29 @@ class FileSystem:
         
         return result
             
+class MemoryManager():
+
+    def __init__(self):
+        self._freeFrames = self.getFrames()
+        self._pageTables = []
+
+    def getFrames(self):
+        result = []
+        totalFrames = HARDWARE.memory.size // HARDWARE.mmu.frameSize
+
+        for i in range(totalFrames):
+            result.append(i)
+
+        return result
+
+    def allocFrames(self, quantity):
+        if len(self._freeFrames) < quantity:
+            raise Exception("Frames insuficientes para cargar el proceso")
+        result = []
+        for i in range(quantity):
+            result.append(self._freeFrames[0])
+            self._freeFrames.pop(0)
+        return result
+
+    def freeFrames(self, frames):
+        self._freeFrames = self._freeFrames + frames
