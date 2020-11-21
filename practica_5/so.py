@@ -131,6 +131,7 @@ class KillInterruptionHandler(AbstractInterruptionHandler):
         pcb = self.kernel._pcbTable.runningPCB
         self.kernel._gantt.finish(pcb._path)
         self.kernel._pcbTable._runningPCB = None
+        self.kernel.freeFrames(pcb._pageTable)
         pcb.state = PCBState.TERMINATED
         self.kernel._dispatcher.save(pcb)
         self.loadIfReadyQueueNotEmpty()
@@ -247,6 +248,9 @@ class Kernel():
     
     def setSchedulingStrategy(self, strategy):
         self._scheduler = strategy
+    
+    def freeFrames(self, frames):
+        self._memoryManager.freeFrames(frames)
 
 class PCB():
     
@@ -410,9 +414,9 @@ class MemoryManager():
             raise Exception("Frames insuficientes para cargar el proceso")
         result = []
         for i in range(quantity):
-            result.append(self._freeFrames[0])
-            self._freeFrames.pop(0)
+            result.append(self._freeFrames.pop(0))
+
         return result
 
     def freeFrames(self, frames):
-        self._freeFrames = self._freeFrames + frames
+        self._freeFrames.extend(frames)
