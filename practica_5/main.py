@@ -12,7 +12,7 @@ if __name__ == '__main__':
     log.logger.info('Starting emulator')
 
     ## setup our hardware and set memory size to 25 "cells"
-    HARDWARE.setup(25)
+    HARDWARE.setup(40)
 
     ## Switch on computer
     HARDWARE.switchOn()
@@ -23,23 +23,27 @@ if __name__ == '__main__':
 
     # kernel.setSchedulingStrategy(FirstComeFirstServed())
     # kernel.setSchedulingStrategy(NoPreemtiveShortestJobFirst())
-    # kernel.setSchedulingStrategy(PreemtiveShortestJobFirst())
-    kernel.setSchedulingStrategy(RoundRobin())
+    kernel.setSchedulingStrategy(PreemtiveShortestJobFirst())
+    # kernel.setSchedulingStrategy(RoundRobin())
     # kernel.setSchedulingStrategy(PriorityExpropiativo())
     # kernel.setSchedulingStrategy(PriorityNoExpropiativo())
 
     # Ahora vamos a intentar ejecutar 3 programas a la vez
     ##################
-    prg1 = Program("prg1.exe", [ASM.CPU(6)])
+    prg1 = Program("prg1.exe", [ASM.CPU(7)])
     prg2 = Program("prg2.exe", [ASM.CPU(4)])
-    prg3 = Program("prg3.exe", [ASM.CPU(3)])
-    prg4 = Program("prg4.exe", [ASM.CPU(2)])
+    prg3 = Program("prg3.exe", [ASM.CPU(1)])
+    
+    kernel.enableGantt(False)
+
+    kernel._fileSystem.write('c:/prg1.exe', prg1)
+    kernel._fileSystem.write('c:/prg2.exe', prg2)
+    kernel._fileSystem.write('c:/prg3.exe', prg3)
 
     # execute all programs "concurrently"
-    kernel.run(prg1, 5)
-    #sleep(1)
-    kernel.run(prg2, 2)
-    #sleep(1)
-    kernel.run(prg3, 3)
-    #sleep(1)
-    kernel.run(prg4, 1)
+    kernel.run('c:/prg1.exe', 0)
+    sleep(1)
+    kernel.run('c:/prg2.exe', 2)
+    sleep(1)
+    kernel.run('c:/prg3.exe', 1)
+    sleep(1)

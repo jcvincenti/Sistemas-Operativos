@@ -131,6 +131,7 @@ class KillInterruptionHandler(AbstractInterruptionHandler):
         pcb = self.kernel._pcbTable.runningPCB
         self.kernel._gantt.finish(pcb._path)
         self.kernel._pcbTable._runningPCB = None
+        self.kernel.freeFrames(pcb._pageTable)
         pcb.state = PCBState.TERMINATED
         self.kernel._dispatcher.save(pcb)
         self.loadIfReadyQueueNotEmpty()
@@ -161,12 +162,14 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
 
     def execute(self, irq):
         newParam = irq.parameters
-        program = newParam['program']
+        path = newParam['program']
         priority = newParam['priority']
-        dir = self.kernel._loader.loadInMemory(program)
-        pid = self.kernel._pcbTable.getNewPID()
+        obj = self.kernel._loader.loadInMemory(path)
+        pageTable = obj['pageTable']
+        program = obj['program']
         progSize = len(program.instructions)
-        pcb = PCB(pid, dir, program.name, progSize, priority)
+        pid = self.kernel._pcbTable.getNewPID()
+        pcb = PCB(pid, pageTable, progSize, path, priority)
         self.kernel._pcbTable.add(pcb)
         self.loadIfNoRunningPcb(pcb)
 
@@ -193,6 +196,7 @@ class Kernel():
 
     def __init__(self):
         ## setup interruption handlers
+        HARDWARE.mmu.frameSize = 4
         killHandler = KillInterruptionHandler(self)
         HARDWARE.interruptVector.register(KILL_INTERRUPTION_TYPE, killHandler)
 
@@ -214,29 +218,31 @@ class Kernel():
         ## controls the Hardware's I/O Device
         self._ioDeviceController = IoDeviceController(HARDWARE.ioDevice)
         self._pcbTable = PCBTable()
-        self._loader = Loader()
         self._dispatcher = Dispatcher()
         self._scheduler = None
         self._gantt = Gantt.getInstance()
         self._gantt.setKernel(self)
+        self._fileSystem = FileSystem()
+        self._memoryManager = MemoryManager()
+        self._loader = Loader(self._memoryManager, self._fileSystem)
 
     @property
     def ioDeviceController(self):
         return self._ioDeviceController
 
     ## emulates a "system call" for programs execution
-    def run(self, program, priority):
+    def run(self, path, priority):
         if self._scheduler == None:
             raise Exception("--- NO SCHEDULER SETTED ---")
 
-        self._gantt.load(program.name)
-        dictNewParam = {'program': program, 'priority': priority}
+        self._gantt.load(path)
+        dictNewParam = {'program': path, 'priority': priority}
 
         newIRQ = IRQ(NEW_INTERRUPTION_TYPE, dictNewParam)
         HARDWARE.interruptVector.handle(newIRQ)
 
         # set CPU program counter at program's first intruction
-        log.logger.info("\n Executing program: {name}".format(name=program.name))
+        log.logger.info("\n Executing program: {name}".format(name=path))
         log.logger.info(HARDWARE)
 
     def __repr__(self):
@@ -244,16 +250,22 @@ class Kernel():
     
     def setSchedulingStrategy(self, strategy):
         self._scheduler = strategy
+    
+    def freeFrames(self, frames):
+        self._memoryManager.freeFrames(frames)
+
+    def enableGantt(self, enable):
+        HARDWARE.cpu.enable_stats = enable
 
 class PCB():
     
-    def __init__(self, pid, basedir, path, progSize, priority):
+    def __init__(self, pid, pageTable, progSize, path, priority):
         self._pid = pid
-        self._basedir = basedir
+        self._pageTable = pageTable
         self._path = path
         self._state = PCBState.NEW
-        self._pc = 0
         self._progSize = progSize
+        self._pc = 0
         self._priority = priority
 
     @property
@@ -317,25 +329,100 @@ class PCBTable():
 
 class Loader():
 
-    def __init__(self):
+    def __init__(self, memoryManager, fileSystem):
         self._baseDir = 0
+        self._memoryManager = memoryManager
+        self._fileSystem = fileSystem
     
-    def loadInMemory(self, program):
-        oldBaseDir = self._baseDir
-        progSize = len(program.instructions)
-        for index in range(0, progSize):
-            inst = program.instructions[index]
-            HARDWARE.memory.write(index + oldBaseDir, inst)
+    def loadInMemory(self, path):
+        program = self._fileSystem.read(path)
+        neccesaryPages = self.getNeccesaryPages(program)
+        pageTable = self._memoryManager.allocFrames(neccesaryPages)
+        paged = self.paginate(program.instructions)
+        dictionary = self.assignKeys(paged, pageTable)
+        
+        for page in dictionary.items():
+            self.loadPage(page)
+
+        return {'pageTable': pageTable, 'program': program}
+
+    def assignKeys(self, paged, pageTable):
+        return dict(zip(pageTable, paged))
+
+    def paginate(self, instructions):
+        frameSize = HARDWARE.mmu.frameSize
+        result = [instructions[i: i + frameSize] for i in range(0, len(instructions), frameSize)]
+        return result
+
+    def getNeccesaryPages(self, program):
+        if(len(program.instructions)) % HARDWARE.mmu.frameSize != 0:
+            return (len(program.instructions)) // HARDWARE.mmu.frameSize + 1
+        return (len(program.instructions)) // HARDWARE.mmu.frameSize
+            
+    def loadPage(self, page):
+        instructions = page[1] #El value
+        self._baseDir = page[0] * HARDWARE.mmu.frameSize  #La key(frame que me devuelve el MM) * frameSize
+        for i in range(len(instructions)):
+            inst = instructions[i]
+            HARDWARE.memory.write(self._baseDir, inst)
             self._baseDir += 1
-        return oldBaseDir
 
 class Dispatcher():
 
     def load(self, pcb):
         HARDWARE.cpu.pc = pcb._pc
-        HARDWARE.mmu.baseDir = pcb._basedir
         HARDWARE.timer.reset()
+        HARDWARE.mmu.resetTLB()
+
+        for pageTable in pcb._pageTable:
+            HARDWARE.mmu.setPageFrame(pcb._pageTable.index(pageTable), pageTable)
 
     def save(self, pcb):
         pcb._pc = HARDWARE.cpu.pc
         HARDWARE.cpu.pc = -1
+
+class FileSystem:
+
+    def __init__(self):
+        self._disk = []
+
+    def write(self, path, program):
+        process = {'path': path, 'program': program }
+        self._disk.append(process)
+
+    def read(self, path):
+        result = None
+        for program in self._disk:
+            if program['path'] == path:
+                result = program['program']
+                break
+        if not result:
+            raise Exception	("Path invalido")
+        
+        return result
+            
+class MemoryManager():
+
+    def __init__(self):
+        self._freeFrames = self.getFrames()
+
+    def getFrames(self):
+        result = []
+        totalFrames = HARDWARE.memory.size // HARDWARE.mmu.frameSize
+
+        for i in range(totalFrames):
+            result.append(i)
+
+        return result
+
+    def allocFrames(self, quantity):
+        if len(self._freeFrames) < quantity:
+            raise Exception("Frames insuficientes para cargar el proceso")
+        result = []
+        for i in range(quantity):
+            result.append(self._freeFrames.pop(0))
+
+        return result
+
+    def freeFrames(self, frames):
+        self._freeFrames.extend(frames)
