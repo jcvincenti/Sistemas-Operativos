@@ -161,12 +161,11 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
 
     def execute(self, irq):
         newParam = irq.parameters
-        program = newParam['program']
+        path = newParam['program']
         priority = newParam['priority']
-        pageTable = self.kernel._loader.loadInMemory(program)
+        pageTable = self.kernel._loader.loadInMemory(path)
         pid = self.kernel._pcbTable.getNewPID()
-        progSize = len(program.instructions)
-        pcb = PCB(pid, pageTable, program.name, progSize, priority)
+        pcb = PCB(pid, pageTable, path, priority)
         self.kernel._pcbTable.add(pcb)
         self.loadIfNoRunningPcb(pcb)
 
@@ -221,7 +220,7 @@ class Kernel():
         self._gantt.setKernel(self)
         self._fileSystem = FileSystem()
         self._memoryManager = MemoryManager()
-        self._loader = Loader(self._memoryManager)
+        self._loader = Loader(self._memoryManager, self._fileSystem)
 
     @property
     def ioDeviceController(self):
@@ -232,15 +231,15 @@ class Kernel():
         if self._scheduler == None:
             raise Exception("--- NO SCHEDULER SETTED ---")
 
-        program = self._fileSystem.read(path)
-        self._gantt.load(program.name)
-        dictNewParam = {'program': program, 'priority': priority}
+        #program = self._fileSystem.read(path)
+        self._gantt.load(path)
+        dictNewParam = {'program': path, 'priority': priority}
 
         newIRQ = IRQ(NEW_INTERRUPTION_TYPE, dictNewParam)
         HARDWARE.interruptVector.handle(newIRQ)
 
         # set CPU program counter at program's first intruction
-        log.logger.info("\n Executing program: {name}".format(name=program.name))
+        log.logger.info("\n Executing program: {name}".format(name=path))
         log.logger.info(HARDWARE)
 
     def __repr__(self):
@@ -251,13 +250,12 @@ class Kernel():
 
 class PCB():
     
-    def __init__(self, pid, pageTable, path, progSize, priority):
+    def __init__(self, pid, pageTable, path, priority):
         self._pid = pid
         self._pageTable = pageTable
         self._path = path
         self._state = PCBState.NEW
         self._pc = 0
-        self._progSize = progSize
         self._priority = priority
 
     @property
@@ -273,14 +271,14 @@ class PCB():
         return self._priority
     
     def remainingInternalInstructions(self):
-        return self._progSize - self._pc
+        return (len(self._pageTable) * HARDWARE.mmu.frameSize) - self._pc
 
     def updatePC(self):
         self._pc = HARDWARE.cpu.pc
 
     def remainingInstructions(self):
         # metodo solo para el Gantt
-        return self._progSize - HARDWARE.cpu.pc if self.state == PCBState.RUNNING else self._progSize
+        return (len(self._pageTable) * HARDWARE.mmu.frameSize) - HARDWARE.cpu.pc if self.state == PCBState.RUNNING else (len(self._pageTable) * HARDWARE.mmu.frameSize)
 
 class PCBTable():
     
@@ -321,11 +319,13 @@ class PCBTable():
 
 class Loader():
 
-    def __init__(self, memoryManager):
+    def __init__(self, memoryManager, fileSystem):
         self._baseDir = 0
         self._memoryManager = memoryManager
+        self._fileSystem = fileSystem
     
-    def loadInMemory(self, program):
+    def loadInMemory(self, path):
+        program = self._fileSystem.read(path)
         neccesaryPages = self.getNeccesaryPages(program)
         pageTable = self._memoryManager.allocFrames(neccesaryPages)
         paged = self.paginate(program.instructions)
