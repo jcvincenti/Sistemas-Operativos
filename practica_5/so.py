@@ -163,10 +163,10 @@ class NewInterruptionHandler(AbstractInterruptionHandler):
         newParam = irq.parameters
         program = newParam['program']
         priority = newParam['priority']
-        dir = self.kernel._loader.loadInMemory(program)
+        pageTable = self.kernel._loader.loadInMemory(program)
         pid = self.kernel._pcbTable.getNewPID()
         progSize = len(program.instructions)
-        pcb = PCB(pid, dir, program.name, progSize, priority)
+        pcb = PCB(pid, pageTable, program.name, progSize, priority)
         self.kernel._pcbTable.add(pcb)
         self.loadIfNoRunningPcb(pcb)
 
@@ -251,9 +251,9 @@ class Kernel():
 
 class PCB():
     
-    def __init__(self, pid, basedir, path, progSize, priority):
+    def __init__(self, pid, pageTable, path, progSize, priority):
         self._pid = pid
-        self._basedir = basedir
+        self._pageTable = pageTable
         self._path = path
         self._state = PCBState.NEW
         self._pc = 0
@@ -326,22 +326,15 @@ class Loader():
         self._memoryManager = memoryManager
     
     def loadInMemory(self, program):
-        print("instrucciones" + str(program.instructions))
-      
         neccesaryPages = self.getNeccesaryPages(program)
-        print("neccesary pages " + str(neccesaryPages))
-       
         pageTable = self._memoryManager.allocFrames(neccesaryPages)
-        print("pagetable " + str(pageTable))
-       
         paged = self.paginate(program.instructions)
-        print("programa paginado: " + str(paged))
-
         dictionary = self.assignKeys(paged, pageTable)
-        print("con keys: " + str(dictionary))
-
+        
         for page in dictionary.items():
             self.loadPage(page)
+
+        return pageTable
 
     def assignKeys(self, paged, pageTable):
         return dict(zip(pageTable, paged))
@@ -368,8 +361,11 @@ class Dispatcher():
 
     def load(self, pcb):
         HARDWARE.cpu.pc = pcb._pc
-        HARDWARE.mmu.baseDir = pcb._basedir
         HARDWARE.timer.reset()
+        HARDWARE.mmu.resetTLB()
+
+        for pageTable in pcb._pageTable:
+            HARDWARE.mmu.setPageFrame(pcb._pageTable.index(pageTable), pageTable)
 
     def save(self, pcb):
         pcb._pc = HARDWARE.cpu.pc
@@ -399,7 +395,6 @@ class MemoryManager():
 
     def __init__(self):
         self._freeFrames = self.getFrames()
-        self._pageTables = []
 
     def getFrames(self):
         result = []
