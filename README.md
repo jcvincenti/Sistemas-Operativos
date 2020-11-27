@@ -24,3 +24,5 @@
 ### Practica 4:
 - 28/10/2020 - Aprobado
 
+### Practica 5:
+- 27/11/2020 - Aprobado
